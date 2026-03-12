@@ -38,4 +38,8 @@ def recommend(item_id):
 
 # Test recommendation
 print("\n🎯 Recommendations for item 1:")
+<<<<<<< HEAD
 print(recommend(1))
+=======
+print(recommend(1))
+>>>>>>> 9301c059000b1fde7b9592bfd158bf6f18c555c2
