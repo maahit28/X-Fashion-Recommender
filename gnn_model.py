@@ -4,6 +4,7 @@ import networkx as nx
 from torch_geometric.data import Data
 from torch_geometric.nn import GCNConv
 from sklearn.metrics.pairwise import cosine_similarity
+import torch.nn.functional as F
 
 # Load dataset
 df = pd.read_csv("data.csv")
@@ -26,7 +27,7 @@ for i in range(len(df)):
         if same_color or same_style:
             G.add_edge(df.loc[i, "id"], df.loc[j, "id"])
 
-# Map node ids → indices
+# Map node IDs to indices
 node_mapping = {node: i for i, node in enumerate(G.nodes())}
 
 edges = []
@@ -35,12 +36,12 @@ for u, v in G.edges():
 
 edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous()
 
-# Node feature matrix (real encoded features)
+# Node feature matrix
 x = torch.tensor(df_encoded.values, dtype=torch.float)
 
 data = Data(x=x, edge_index=edge_index)
 
-# Define GNN model
+# Define GNN
 class GNN(torch.nn.Module):
     def __init__(self, num_features):
         super().__init__()
@@ -53,19 +54,31 @@ class GNN(torch.nn.Module):
         x = self.conv2(x, edge_index)
         return x
 
-# Initialize model
 model = GNN(x.shape[1])
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-# Forward pass
-embeddings = model(data)
+# Training loop
+for epoch in range(100):
+    optimizer.zero_grad()
 
-print("Node embeddings:")
-print(embeddings)
+    embeddings = model(data)
 
-# Convert embeddings to numpy
+    src = embeddings[edge_index[0]]
+    dst = embeddings[edge_index[1]]
+
+    score = (src * dst).sum(dim=1)
+
+    loss = F.binary_cross_entropy_with_logits(score, torch.ones_like(score))
+
+    loss.backward()
+    optimizer.step()
+
+    if epoch % 10 == 0:
+        print(f"Epoch {epoch} Loss: {loss.item()}")
+
+# Final embeddings
 emb = embeddings.detach().numpy()
 
-# Similarity matrix
 sim_matrix = cosine_similarity(emb)
 
 def recommend(item_index, top_k=3):
