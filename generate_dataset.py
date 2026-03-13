@@ -24,8 +24,7 @@ dresses = [
 
 outerwear = [
 "denim_jacket","leather_jacket","bomber_jacket",
-"trench_coat","overcoat","parka","blazer",
-"cape","cardigan","puffer_jacket"
+"trench_coat","overcoat","parka","blazer","cape","puffer_jacket"
 ]
 
 shoes = [
@@ -100,11 +99,40 @@ price_ranges = [
 "low","medium","high","premium"
 ]
 
+
+# Compatibility rules
+
+winter_items = ["coat","parka","puffer_jacket","boots","sweater"]
+summer_items = ["tank_top","crop_top","shorts","sandals","sundress"]
+
+pear_body_items = ["wide_leg_jeans","palazzo","a_line_skirt"]
+apple_body_items = ["wrap_dress","peplum_top"]
+hourglass_items = ["bodycon_dress","belt"]
+
+
 data = []
 
 for i in range(DATASET_SIZE):
 
     category = random.choice(categories)
+
+    season = random.choice(seasons)
+
+    if season == "winter":
+        if random.random() < 0.3:
+            category = random.choice(outerwear)
+
+    if season == "summer":
+        if random.random() < 0.3:
+            category = random.choice(tops + dresses)
+
+    body_type = random.choice(body_types)
+
+    if body_type == "pear" and random.random() < 0.3:
+        category = random.choice(["wide_leg_jeans","palazzo","skirt"])
+
+    if body_type == "apple" and random.random() < 0.3:
+        category = random.choice(["wrap_dress","peplum_top"])
 
     row = {
         "id": i,
@@ -113,9 +141,9 @@ for i in range(DATASET_SIZE):
         "pattern": random.choice(patterns),
         "style": random.choice(styles),
         "fit": random.choice(fits),
-        "season": random.choice(seasons),
+        "season": season,
         "occasion": random.choice(occasions),
-        "body_type": random.choice(body_types),
+        "body_type": body_type,
         "skin_tone": random.choice(skin_tones),
         "comfort_level": random.choice(comfort_levels),
         "material": random.choice(materials),
@@ -129,4 +157,4 @@ df = pd.DataFrame(data)
 
 df.to_csv("data.csv", index=False)
 
-print("Fashion dataset generated:", len(df), "items")
+print("Fashion dataset generated with", len(df), "items")
