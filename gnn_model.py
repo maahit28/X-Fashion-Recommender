@@ -18,7 +18,7 @@ G = nx.Graph()
 for _, row in df.iterrows():
     G.add_node(row["id"])
 
-# Create compatibility edges
+# Create edges based on compatibility
 for i in range(len(df)):
     for j in range(i + 1, len(df)):
         same_color = df.loc[i, "color"] == df.loc[j, "color"]
@@ -27,7 +27,7 @@ for i in range(len(df)):
         if same_color or same_style:
             G.add_edge(df.loc[i, "id"], df.loc[j, "id"])
 
-# Map node IDs to indices
+# Map node IDs → indices
 node_mapping = {node: i for i, node in enumerate(G.nodes())}
 
 edges = []
@@ -57,7 +57,7 @@ class GNN(torch.nn.Module):
 model = GNN(x.shape[1])
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
 
-# Training loop
+# Training
 for epoch in range(100):
     optimizer.zero_grad()
 
@@ -76,15 +76,51 @@ for epoch in range(100):
     if epoch % 10 == 0:
         print(f"Epoch {epoch} Loss: {loss.item()}")
 
-# Final embeddings
+# Get embeddings
 emb = embeddings.detach().numpy()
 
+# Similarity matrix
 sim_matrix = cosine_similarity(emb)
 
+# Recommendation function
 def recommend(item_index, top_k=3):
     scores = sim_matrix[item_index]
     similar_items = scores.argsort()[::-1][1:top_k+1]
     return similar_items
 
-print("\nRecommended items for item 0:")
-print(recommend(0))
+# Explanation function
+def explain_recommendation(base_item, recommended_item):
+
+    reasons = []
+
+    if df.loc[base_item, "color"] == df.loc[recommended_item, "color"]:
+        reasons.append("same color")
+
+    if df.loc[base_item, "style"] == df.loc[recommended_item, "style"]:
+        reasons.append("similar style")
+
+    if df.loc[base_item, "category"] == df.loc[recommended_item, "category"]:
+        reasons.append("same category")
+
+    similarity_score = sim_matrix[base_item][recommended_item]
+
+    return reasons, similarity_score
+
+
+# Test recommendation
+base_item = 0
+
+print("\nRecommendations for item 0:\n")
+
+recs = recommend(base_item)
+
+for r in recs:
+
+    reasons, score = explain_recommendation(base_item, r)
+
+    print("Recommended item:", df.loc[r, "category"])
+    print("Color:", df.loc[r, "color"])
+    print("Style:", df.loc[r, "style"])
+    print("Similarity score:", round(score,3))
+    print("Reason:", reasons)
+    print("-----")
