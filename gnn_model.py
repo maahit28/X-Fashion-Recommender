@@ -5,77 +5,79 @@ from torch_geometric.data import Data
 from torch_geometric.nn import GCNConv
 from sklearn.metrics.pairwise import cosine_similarity
 import torch.nn.functional as F
+import random
 
 # Load dataset
 df = pd.read_csv("data.csv")
 
 # Encode categorical features
 df_encoded = pd.get_dummies(df[[
-    "category",
-    "color",
-    "style",
-    "season",
-    "occasion",
-    "gender",
-    "material",
-    "brand",
-    "price_range"
+"category","color","pattern","style","fit","season",
+"occasion","body_type","skin_tone","comfort_level",
+"material","brand","price_range"
 ]])
 
-# Build graph
+# -------- GRAPH CONSTRUCTION (FAST VERSION) --------
+
 G = nx.Graph()
 
 for _, row in df.iterrows():
     G.add_node(row["id"])
 
-for i in range(len(df)):
-    for j in range(i + 1, len(df)):
+# connect items with similar attributes using grouping
+for col in ["color","style","season"]:
+    
+    groups = df.groupby(col)
 
-        same_color = df.loc[i, "color"] == df.loc[j, "color"]
-        same_style = df.loc[i, "style"] == df.loc[j, "style"]
-        same_season = df.loc[i, "season"] == df.loc[j, "season"]
+    for _, group in groups:
+        
+        ids = group["id"].tolist()
 
-        if same_color or same_style or same_season:
-            G.add_edge(df.loc[i, "id"], df.loc[j, "id"])
+        for i in range(len(ids)-1):
+            G.add_edge(ids[i], ids[i+1])
 
-# Map node ids
-node_mapping = {node: i for i, node in enumerate(G.nodes())}
+print("Nodes:", G.number_of_nodes())
+print("Edges:", G.number_of_edges())
+
+# map nodes
+node_mapping = {node:i for i,node in enumerate(G.nodes())}
 
 edges = []
-for u, v in G.edges():
-    edges.append([node_mapping[u], node_mapping[v]])
+for u,v in G.edges():
+    edges.append([node_mapping[u],node_mapping[v]])
 
-edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous()
+edge_index = torch.tensor(edges,dtype=torch.long).t().contiguous()
 
-# Node features
-x = torch.tensor(df_encoded.values, dtype=torch.float)
+# features
+x = torch.tensor(df_encoded.values,dtype=torch.float)
 
-data = Data(x=x, edge_index=edge_index)
+data = Data(x=x,edge_index=edge_index)
 
-# Define GNN
+# -------- GNN MODEL --------
+
 class GNN(torch.nn.Module):
 
-    def __init__(self, num_features):
+    def __init__(self,num_features):
         super().__init__()
 
-        self.conv1 = GCNConv(num_features, 32)
-        self.conv2 = GCNConv(32, 16)
+        self.conv1 = GCNConv(num_features,32)
+        self.conv2 = GCNConv(32,16)
 
-    def forward(self, data):
+    def forward(self,data):
 
-        x, edge_index = data.x, data.edge_index
+        x,edge_index = data.x,data.edge_index
 
-        x = self.conv1(x, edge_index).relu()
-        x = self.conv2(x, edge_index)
+        x = self.conv1(x,edge_index).relu()
+        x = self.conv2(x,edge_index)
 
         return x
 
 model = GNN(x.shape[1])
+optimizer = torch.optim.Adam(model.parameters(),lr=0.01)
 
-optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+# -------- TRAIN --------
 
-# Train GNN
-for epoch in range(100):
+for epoch in range(50):
 
     optimizer.zero_grad()
 
@@ -84,109 +86,111 @@ for epoch in range(100):
     src = embeddings[edge_index[0]]
     dst = embeddings[edge_index[1]]
 
-    score = (src * dst).sum(dim=1)
+    score = (src*dst).sum(dim=1)
 
-    loss = F.binary_cross_entropy_with_logits(score, torch.ones_like(score))
+    loss = F.binary_cross_entropy_with_logits(score,torch.ones_like(score))
 
     loss.backward()
-
     optimizer.step()
 
     if epoch % 10 == 0:
-        print("Epoch", epoch, "Loss:", loss.item())
+        print("Epoch",epoch,"Loss:",loss.item())
 
-# Generate embeddings
+# -------- EMBEDDINGS --------
+
 emb = embeddings.detach().numpy()
-
-# Similarity matrix
 sim_matrix = cosine_similarity(emb)
 
-# Recommendation function
-def recommend(item_index, top_k=3):
+# -------- RECOMMEND --------
+
+def recommend(item_index,top_k=20):
 
     scores = sim_matrix[item_index]
 
-    similar_items = scores.argsort()[::-1][1:top_k+1]
-
-    return similar_items
-
-# Explanation function
-def explain_recommendation(base_item, recommended_item):
-
-    reasons = []
-
-    if df.loc[base_item, "color"] == df.loc[recommended_item, "color"]:
-        reasons.append("same color")
-
-    if df.loc[base_item, "style"] == df.loc[recommended_item, "style"]:
-        reasons.append("similar style")
-
-    if df.loc[base_item, "season"] == df.loc[recommended_item, "season"]:
-        reasons.append("same season")
-
-    similarity_score = sim_matrix[base_item][recommended_item]
-
-    return reasons, similarity_score
+    return scores.argsort()[::-1][1:top_k+1]
 
 
-# Outfit generator
+# -------- OUTFIT GENERATOR --------
+
+tops = [
+"tshirt","shirt","blouse","crop_top","tank_top","camisole",
+"tube_top","halter_top","wrap_top","peplum_top","hoodie",
+"sweater","cardigan","turtleneck","bodysuit"
+]
+
+bottoms = [
+"jeans","skinny_jeans","wide_leg_jeans","mom_jeans",
+"baggy_jeans","trousers","cargo_pants","leggings",
+"palazzo","culottes","skirt","mini_skirt","midi_skirt",
+"maxi_skirt","skort","shorts","denim_shorts","bike_shorts"
+]
+
+outerwear = [
+"denim_jacket","leather_jacket","bomber_jacket",
+"trench_coat","overcoat","parka","blazer","cape","puffer_jacket"
+]
+
+shoes = [
+"sneakers","running_shoes","high_heels","stilettos",
+"boots","ankle_boots","knee_boots","loafers",
+"sandals","platforms","wedges","flats"
+]
+
+accessories = [
+"necklace","choker","earrings","bracelet",
+"watch","belt","bag","tote_bag",
+"crossbody_bag","clutch","scarf",
+"sunglasses","hairband","ring"
+]
+
+
 def generate_outfit(base_item):
 
-    top_items = ["shirt", "tshirt", "hoodie", "sweater"]
-    bottom_items = ["jeans", "trousers", "shorts"]
-    outerwear_items = ["jacket", "coat", "blazer"]
+    recs = recommend(base_item,top_k=50)
 
-    top = None
-    bottom = None
-    outerwear = None
-
-    recs = recommend(base_item, top_k=15)
+    outfit = {}
 
     for r in recs:
 
-        category = df.loc[r, "category"]
+        cat = df.loc[r,"category"]
 
-        if category in top_items and top is None:
-            top = r
+        if cat in tops and "top" not in outfit:
+            outfit["top"] = r
 
-        elif category in bottom_items and bottom is None:
-            bottom = r
+        elif cat in bottoms and "bottom" not in outfit:
+            outfit["bottom"] = r
 
-        elif category in outerwear_items and outerwear is None:
-            outerwear = r
+        elif cat in outerwear and "outerwear" not in outfit:
+            outfit["outerwear"] = r
 
-    return top, bottom, outerwear
+        elif cat in shoes and "shoes" not in outfit:
+            outfit["shoes"] = r
 
+        elif cat in accessories and "accessory" not in outfit:
+            outfit["accessory"] = r
 
-# Test recommendation
-base_item = 0
+        if len(outfit) == 5:
+            break
 
-print("\nRecommendations for item 0:\n")
-
-recs = recommend(base_item)
-
-for r in recs:
-
-    reasons, score = explain_recommendation(base_item, r)
-
-    print("Recommended item:", df.loc[r, "category"])
-    print("Color:", df.loc[r, "color"])
-    print("Style:", df.loc[r, "style"])
-    print("Similarity score:", round(score,3))
-    print("Reason:", reasons)
-    print("-----")
+    return outfit
 
 
-# Generate outfit
+# -------- TEST --------
+
+base_item = random.randint(0,len(df)-1)
+
+print("\nBase item:",df.loc[base_item,"category"],df.loc[base_item,"color"])
+
+outfit = generate_outfit(base_item)
+
 print("\nGenerated Outfit:\n")
 
-top, bottom, outerwear = generate_outfit(base_item)
+for key,val in outfit.items():
 
-if top is not None:
-    print("Top:", df.loc[top, "category"], "-", df.loc[top, "color"])
-
-if bottom is not None:
-    print("Bottom:", df.loc[bottom, "category"], "-", df.loc[bottom, "color"])
-
-if outerwear is not None:
-    print("Outerwear:", df.loc[outerwear, "category"], "-", df.loc[outerwear, "color"])
+    print(
+        key.capitalize(),
+        ":",
+        df.loc[val,"category"],
+        "-",
+        df.loc[val,"color"]
+    )
