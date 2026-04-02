@@ -1,160 +1,251 @@
+"""
+X-Fashion: Synthetic Dataset Generator
+Generates 50,000–100,000 fashion items with rule-based distributions
+"""
+
 import pandas as pd
+import numpy as np
 import random
+import os
+import json
 
-DATASET_SIZE = 10000
+# ─── Seed for reproducibility ────────────────────────────────────────────────
+random.seed(42)
+np.random.seed(42)
 
-tops = [
-"tshirt","shirt","blouse","crop_top","tank_top","camisole",
-"tube_top","halter_top","wrap_top","peplum_top","hoodie",
-"sweater","cardigan","turtleneck","bodysuit"
-]
+# ─── Taxonomy ─────────────────────────────────────────────────────────────────
+CATEGORIES = {
+    # Western
+    "top": ["tshirt", "blouse", "crop_top", "tank_top", "shirt", "polo", "sweater", "hoodie", "turtleneck", "camisole"],
+    "bottom": ["jeans", "trousers", "shorts", "skirt", "leggings", "wide_leg_pants", "palazzo", "cargo_pants", "culottes", "mini_skirt"],
+    "dress": ["maxi_dress", "midi_dress", "mini_dress", "wrap_dress", "shift_dress", "bodycon_dress"],
+    "outerwear": ["blazer", "jacket", "coat", "trench_coat", "denim_jacket", "bomber_jacket", "cardigan", "puffer_jacket", "windbreaker"],
+    "shoes": ["sneakers", "heels", "boots", "loafers", "sandals", "flats", "ankle_boots", "oxfords", "mules", "platforms"],
+    "accessories": ["belt", "watch", "sunglasses", "handbag", "scarf", "hat", "necklace", "earrings", "bracelet", "backpack"],
+    # Indian / Ethnic
+    "ethnic_top": ["kurti", "kurta", "blouse_ethnic", "choli", "anarkali_top"],
+    "ethnic_bottom": ["salwar", "palazzo_ethnic", "lehenga_skirt", "dhoti_pants", "sharara"],
+    "ethnic_full": ["saree", "lehenga", "salwar_kameez", "anarkali", "churidar_suit"],
+    "ethnic_outerwear": ["dupatta", "shawl", "waistcoat_ethnic", "cape_ethnic"],
+    "ethnic_shoes": ["juttis", "kolhapuri", "wedges_ethnic", "mojari", "heels_ethnic"],
+    "ethnic_accessories": ["maang_tikka", "jhumkas", "bangles", "potli_bag", "kamarband", "nath"],
+}
 
-bottoms = [
-"jeans","skinny_jeans","wide_leg_jeans","mom_jeans",
-"baggy_jeans","trousers","cargo_pants","leggings",
-"palazzo","culottes","skirt","mini_skirt","midi_skirt",
-"maxi_skirt","skort","shorts","denim_shorts","bike_shorts"
-]
+COLORS = {
+    "warm": ["beige", "camel", "rust", "mustard", "terracotta", "coral", "peach", "gold", "brown", "cream", "ivory", "orange"],
+    "cool": ["navy", "cobalt", "steel_grey", "silver", "icy_blue", "lavender", "mint", "teal", "charcoal", "white", "black", "dusty_rose"],
+    "neutral": ["white", "black", "grey", "beige", "cream", "nude", "off_white", "charcoal"],
+    "bright": ["red", "yellow", "electric_blue", "hot_pink", "lime_green", "magenta", "orange", "purple"],
+    "dark": ["black", "midnight_blue", "dark_green", "maroon", "charcoal", "dark_brown", "burgundy", "deep_purple"],
+    "ethnic_colors": ["rani_pink", "parrot_green", "saffron", "turmeric", "indigo", "peacock_blue", "maroon", "ivory", "gold", "emerald"],
+}
 
-dresses = [
-"mini_dress","midi_dress","maxi_dress","bodycon_dress",
-"wrap_dress","slip_dress","shirt_dress","sundress",
-"evening_gown","cocktail_dress","sweater_dress"
-]
+PATTERNS = ["solid", "stripes", "floral", "geometric", "abstract", "checks", "polka_dots", "animal_print",
+            "paisley", "block_print", "embroidered", "sequin", "ikat", "batik", "tie_dye"]
 
-outerwear = [
-"denim_jacket","leather_jacket","bomber_jacket",
-"trench_coat","overcoat","parka","blazer","cape","puffer_jacket"
-]
+STYLES = ["casual", "streetwear", "minimal", "formal", "sporty", "party", "vintage", "elegant", "bohemian", "preppy"]
 
-shoes = [
-"sneakers","running_shoes","high_heels","stilettos",
-"boots","ankle_boots","knee_boots","loafers",
-"sandals","platforms","wedges","flats"
-]
+FITS = {
+    "top":        ["loose", "regular", "fitted", "oversized", "cropped"],
+    "bottom":     ["slim", "regular", "wide_leg", "skinny", "relaxed", "flared"],
+    "dress":      ["fitted", "flowy", "structured", "relaxed"],
+    "outerwear":  ["oversized", "regular", "fitted", "structured"],
+    "shoes":      ["regular"],
+    "accessories":["regular"],
+    "ethnic_top": ["kurta_straight", "kurta_flared", "fitted", "regular"],
+    "ethnic_bottom":["straight", "flared", "fitted", "gathered"],
+    "ethnic_full":["draped", "lehenga_flared", "fitted", "flowy"],
+    "ethnic_outerwear":["drape", "structured", "sheer"],
+    "ethnic_shoes":["regular"],
+    "ethnic_accessories":["regular"],
+}
 
-accessories = [
-"necklace","choker","earrings","bracelet",
-"watch","belt","bag","tote_bag",
-"crossbody_bag","clutch","scarf",
-"sunglasses","hairband","ring"
-]
+SEASONS = ["summer", "winter", "spring", "autumn", "all"]
+OCCASIONS = ["daily", "office", "party", "date", "travel", "gym", "formal_event", "wedding", "festival", "casual"]
+BODY_TYPES = ["pear", "apple", "hourglass", "rectangle", "petite", "tall", "plus"]
+SKIN_TONES = ["warm", "cool", "neutral", "deep", "fair", "olive"]
+COMFORT_LEVELS = ["loose", "regular", "tight"]
+MATERIALS = {
+    "summer": ["cotton", "linen", "chiffon", "georgette", "jersey"],
+    "winter": ["wool", "fleece", "velvet", "corduroy", "tweed", "knit"],
+    "all":    ["polyester", "viscose", "modal", "blend", "denim", "silk"],
+}
+BRANDS = ["Zara", "H&M", "Mango", "Biba", "Libas", "Fabindia", "W", "Indya", "Max", "Westside",
+          "Myntra", "Ajio", "Uniqlo", "Levi's", "Nike", "Adidas", "Puma", "Only", "Vero Moda", "Global Desi"]
+PRICE_RANGES = ["budget", "mid", "premium", "luxury"]
 
-categories = tops + bottoms + dresses + outerwear + shoes + accessories
+# ─── Rule-based probability tables ─────────────────────────────────────────────
+SEASON_CATEGORY_BIAS = {
+    "winter": {"outerwear": 3.0, "ethnic_outerwear": 2.0, "bottom": 1.2},
+    "summer": {"top": 2.0, "dress": 2.5, "ethnic_full": 1.5, "shoes": 1.3},
+    "spring": {"top": 1.5, "outerwear": 1.2, "dress": 1.5},
+    "autumn": {"outerwear": 2.0, "ethnic_outerwear": 1.5, "bottom": 1.2},
+}
 
-colors = [
-"black","white","blue","grey","brown",
-"beige","pink","red","green","navy",
-"purple","orange","yellow","olive"
-]
+OCCASION_STYLE_BIAS = {
+    "office":        {"formal": 3.0, "minimal": 2.0, "elegant": 1.5},
+    "party":         {"party": 3.0, "streetwear": 2.0, "vintage": 1.2},
+    "gym":           {"sporty": 4.0},
+    "formal_event":  {"formal": 3.0, "elegant": 3.0},
+    "daily":         {"casual": 3.0, "minimal": 2.0},
+    "date":          {"elegant": 2.0, "party": 1.5, "minimal": 1.5},
+    "wedding":       {"elegant": 3.0, "formal": 2.0},
+    "festival":      {"ethnic_full": 3.0, "casual": 1.5},
+    "travel":        {"casual": 2.0, "sporty": 2.0},
+    "casual":        {"casual": 3.0, "streetwear": 1.5},
+}
 
-patterns = [
-"solid","striped","checked","floral",
-"printed","denim","polka_dot"
-]
+BODY_FIT_BIAS = {
+    "pear":      {"wide_leg": 3.0, "flared": 2.5, "A-line": 2.0, "slim": 0.3},
+    "apple":     {"loose": 3.0, "flowy": 2.0, "oversized": 2.0, "fitted": 0.4},
+    "hourglass": {"fitted": 3.0, "regular": 2.0},
+    "rectangle": {"structured": 2.5, "oversized": 2.0, "layered": 2.0},
+    "petite":    {"regular": 2.0, "fitted": 2.0, "oversized": 0.3},
+    "tall":      {"wide_leg": 2.0, "oversized": 2.0, "regular": 1.5},
+    "plus":      {"loose": 2.5, "regular": 2.0, "fitted": 0.5},
+}
 
-styles = [
-"casual","streetwear","minimal","formal",
-"sporty","party","vintage","elegant"
-]
+SKINTONE_COLOR_BIAS = {
+    "warm":    ["warm"],
+    "cool":    ["cool"],
+    "neutral": ["neutral", "cool", "warm"],
+    "deep":    ["bright", "dark", "ethnic_colors"],
+    "fair":    ["cool", "neutral", "bright"],
+    "olive":   ["warm", "neutral", "ethnic_colors"],
+}
 
-fits = [
-"oversized","regular","slim",
-"baggy","wide_leg","skinny","loose"
-]
-
-seasons = [
-"summer","winter","spring","autumn"
-]
-
-occasions = [
-"daily","office","party","date",
-"travel","gym","formal_event"
-]
-
-body_types = [
-"pear","apple","hourglass",
-"rectangle","petite","tall","plus"
-]
-
-skin_tones = [
-"warm","cool","neutral","deep","fair","olive"
-]
-
-comfort_levels = [
-"loose","regular","tight"
-]
-
-materials = [
-"cotton","denim","wool","linen",
-"polyester","silk","leather"
-]
-
-brands = [
-"zara","hm","uniqlo","gucci","prada",
-"nike","adidas","levi","puma","mango"
-]
-
-price_ranges = [
-"low","medium","high","premium"
-]
-
-
-# Compatibility rules
-
-winter_items = ["coat","parka","puffer_jacket","boots","sweater"]
-summer_items = ["tank_top","crop_top","shorts","sandals","sundress"]
-
-pear_body_items = ["wide_leg_jeans","palazzo","a_line_skirt"]
-apple_body_items = ["wrap_dress","peplum_top"]
-hourglass_items = ["bodycon_dress","belt"]
+# ─── Helper functions ──────────────────────────────────────────────────────────
+def weighted_choice(options, weights=None):
+    if weights is None:
+        return random.choice(options)
+    total = sum(weights)
+    r = random.uniform(0, total)
+    cumulative = 0
+    for opt, w in zip(options, weights):
+        cumulative += w
+        if r <= cumulative:
+            return opt
+    return options[-1]
 
 
-data = []
+def get_biased_category(season, occasion):
+    all_cats = list(CATEGORIES.keys())
+    weights = []
+    for cat in all_cats:
+        w = 1.0
+        if season in SEASON_CATEGORY_BIAS:
+            w *= SEASON_CATEGORY_BIAS[season].get(cat, 1.0)
+        # Ethnic bias for festival/wedding
+        if occasion in ["wedding", "festival"] and cat.startswith("ethnic"):
+            w *= 2.5
+        elif occasion not in ["wedding", "festival"] and cat.startswith("ethnic"):
+            w *= 0.5
+        weights.append(w)
+    return weighted_choice(all_cats, weights)
 
-for i in range(DATASET_SIZE):
 
-    category = random.choice(categories)
+def get_biased_style(occasion):
+    biases = OCCASION_STYLE_BIAS.get(occasion, {})
+    weights = [biases.get(s, 1.0) for s in STYLES]
+    return weighted_choice(STYLES, weights)
 
-    season = random.choice(seasons)
 
-    if season == "winter":
-        if random.random() < 0.3:
-            category = random.choice(outerwear)
+def get_biased_color(skin_tone):
+    palettes = SKINTONE_COLOR_BIAS.get(skin_tone, ["neutral"])
+    chosen_palette = random.choice(palettes)
+    color_pool = COLORS.get(chosen_palette, COLORS["neutral"])
+    return random.choice(color_pool)
 
-    if season == "summer":
-        if random.random() < 0.3:
-            category = random.choice(tops + dresses)
 
-    body_type = random.choice(body_types)
+def get_biased_fit(category, body_type):
+    fits = FITS.get(category, ["regular"])
+    biases = BODY_FIT_BIAS.get(body_type, {})
+    weights = [biases.get(f, 1.0) for f in fits]
+    return weighted_choice(fits, weights)
 
-    if body_type == "pear" and random.random() < 0.3:
-        category = random.choice(["wide_leg_jeans","palazzo","skirt"])
 
-    if body_type == "apple" and random.random() < 0.3:
-        category = random.choice(["wrap_dress","peplum_top"])
+def get_material(season):
+    if season in MATERIALS:
+        return random.choice(MATERIALS[season])
+    return random.choice(MATERIALS["all"])
 
-    row = {
-        "id": i,
+
+def generate_item(item_id):
+    season = random.choice(SEASONS)
+    occasion = random.choice(OCCASIONS)
+    body_type = random.choice(BODY_TYPES)
+    skin_tone = random.choice(SKIN_TONES)
+    comfort = random.choice(COMFORT_LEVELS)
+
+    category = get_biased_category(season, occasion)
+    style = get_biased_style(occasion)
+    color = get_biased_color(skin_tone)
+    fit = get_biased_fit(category, body_type)
+    pattern = random.choice(PATTERNS)
+    material = get_material(season)
+    brand = random.choice(BRANDS)
+    price = random.choice(PRICE_RANGES)
+
+    # Sub-category item
+    item_options = CATEGORIES[category]
+    item_name = random.choice(item_options)
+
+    return {
+        "id": item_id,
+        "item_name": item_name,
         "category": category,
-        "color": random.choice(colors),
-        "pattern": random.choice(patterns),
-        "style": random.choice(styles),
-        "fit": random.choice(fits),
+        "color": color,
+        "pattern": pattern,
+        "style": style,
+        "fit": fit,
         "season": season,
-        "occasion": random.choice(occasions),
+        "occasion": occasion,
         "body_type": body_type,
-        "skin_tone": random.choice(skin_tones),
-        "comfort_level": random.choice(comfort_levels),
-        "material": random.choice(materials),
-        "brand": random.choice(brands),
-        "price_range": random.choice(price_ranges)
+        "skin_tone": skin_tone,
+        "comfort_level": comfort,
+        "material": material,
+        "brand": brand,
+        "price_range": price,
     }
 
-    data.append(row)
 
-df = pd.DataFrame(data)
+def generate_dataset(n=50000, output_path="data/fashion_dataset.csv"):
+    print(f"Generating {n} fashion items...")
+    items = [generate_item(i) for i in range(1, n + 1)]
+    df = pd.DataFrame(items)
 
-df.to_csv("data.csv", index=False)
+    # Post-processing: enforce a few hard rules
+    # Gym items must be sporty
+    df.loc[df["occasion"] == "gym", "style"] = "sporty"
+    df.loc[df["occasion"] == "gym", "material"] = df.loc[df["occasion"] == "gym", "material"].apply(
+        lambda _: random.choice(["jersey", "polyester", "spandex", "mesh"])
+    )
+    # Winter items → add heavier materials
+    df.loc[df["season"] == "winter", "material"] = df.loc[df["season"] == "winter", "material"].apply(
+        lambda m: m if m in MATERIALS["winter"] else random.choice(MATERIALS["winter"])
+    )
+    # Formal events → no sporty
+    df.loc[df["occasion"] == "formal_event", "style"] = df.loc[df["occasion"] == "formal_event", "style"].apply(
+        lambda s: s if s not in ["sporty", "streetwear"] else "formal"
+    )
 
-print("Fashion dataset generated with", len(df), "items")
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    df.to_csv(output_path, index=False)
+    print(f"✅ Dataset saved to {output_path} ({len(df)} rows)")
+
+    # Save metadata
+    meta = {
+        "total_items": len(df),
+        "categories": df["category"].value_counts().to_dict(),
+        "styles": df["style"].value_counts().to_dict(),
+        "seasons": df["season"].value_counts().to_dict(),
+        "occasions": df["occasion"].value_counts().to_dict(),
+    }
+    with open("data/dataset_meta.json", "w") as f:
+        json.dump(meta, f, indent=2)
+    print("✅ Metadata saved to data/dataset_meta.json")
+    return df
+
+
+if __name__ == "__main__":
+    generate_dataset(n=50000)

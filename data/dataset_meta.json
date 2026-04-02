@@ -1,0 +1,48 @@
+{
+  "total_items": 50000,
+  "categories": {
+    "outerwear": 6816,
+    "dress": 5681,
+    "top": 5376,
+    "shoes": 4565,
+    "bottom": 4549,
+    "accessories": 4146,
+    "ethnic_outerwear": 3731,
+    "ethnic_full": 3174,
+    "ethnic_bottom": 3024,
+    "ethnic_accessories": 2986,
+    "ethnic_shoes": 2985,
+    "ethnic_top": 2967
+  },
+  "styles": {
+    "sporty": 8677,
+    "formal": 6102,
+    "casual": 5862,
+    "elegant": 5659,
+    "party": 4616,
+    "minimal": 4572,
+    "streetwear": 3814,
+    "vintage": 3646,
+    "preppy": 3541,
+    "bohemian": 3511
+  },
+  "seasons": {
+    "all": 10151,
+    "autumn": 10018,
+    "spring": 9998,
+    "summer": 9957,
+    "winter": 9876
+  },
+  "occasions": {
+    "casual": 5072,
+    "gym": 5047,
+    "travel": 5029,
+    "formal_event": 5005,
+    "party": 5004,
+    "festival": 4993,
+    "wedding": 4990,
+    "daily": 4986,
+    "date": 4952,
+    "office": 4922
+  }
+}
