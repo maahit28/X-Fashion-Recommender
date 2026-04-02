@@ -1,6 +1,4 @@
-venv/
-__pycache__/
-*.pyc
 data/
 *.csv
-.env
+__pycache__/
+venv/
