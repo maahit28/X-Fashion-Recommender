@@ -183,3 +183,11 @@ This graph can be fed directly to PyTorch Geometric for GNN training.
 3. **Add GNN**: Use `ItemNode.feature_vector` with PyTorch Geometric
 4. **Add user history**: Track preferences for personalized scoring
 5. **Scale dataset**: Increase `generate_dataset(n=100000)` for 100K items
+
+
+## 🚧 Currently upgrading to v2
+
+* Real outfit images (Pinterest-style)
+* Upload-based outfit generation
+* Buy the look + wishlist system
+* Multi-page UX
